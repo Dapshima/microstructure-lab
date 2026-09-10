@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<!--
+  Microstructure lab: interactive versions of the four models in chapter 2 of
+  Cartea, Jaimungal and Penalva, Algorithmic and High-Frequency Trading (2015).
+
+  Single file, no build step, no dependencies. Everything runs in the visitor's
+  browser. Each model is one function you can read in the script block at the
+  bottom; every function carries a comment block that names the book equation
+  it implements and the page it comes from. The full derivations live in
+  docs/theory-to-code.md and the README maps every slider to a model parameter.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microstructure lab: why market makers charge what they charge</title>
+<meta name="description" content="Interactive versions of the Grossman-Miller, Kyle, Glosten-Milgrom and Ho-Stoll models of market making. Drag the parameters and watch spreads and price impact move.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F7F2;
+  --figure:#FCFDFB;
+  --ink:#16242A;
+  --graphite:#5A6970;
+  --rule:#D7DDD9;
+  --bid:#1B6C79;
+  --ask:#AE3350;
+  --font-display:"Spectral", Georgia, "Times New Roman", serif;
+  --font-ui:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+@media (max-width:600px){html{font-size:15px}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-ui);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:2.25rem 1.25rem 4rem}
+header h1{font-family:var(--font-display);font-weight:500;font-size:clamp(2.1rem,4.5vw,3.1rem);line-height:1.08;margin:0 0 .8rem;letter-spacing:-.01em}
+header p{max-width:62ch;margin:0;font-size:1.05rem;color:var(--graphite)}
+.tabs{display:flex;gap:.25rem;margin:2.25rem 0 1.75rem;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{appearance:none;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;padding:.6rem .9rem;font:inherit;font-size:.95rem;color:var(--graphite);cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+.tabs button:hover{color:var(--ink)}
+.tabs button:focus-visible,button.act:focus-visible,input:focus-visible{outline:2px solid var(--bid);outline-offset:2px}
+.panel[hidden]{display:none}
+.panel h2{font-family:var(--font-display);font-weight:500;font-size:1.7rem;line-height:1.2;margin:0 0 .45rem}
+.panel h3{font-family:var(--font-display);font-weight:500;font-size:1.3rem;margin:2.5rem 0 .4rem}
+.story{max-width:66ch;margin:0 0 1.4rem;color:var(--graphite)}
+.lab{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:1.5rem 2.75rem;align-items:start}
+@media (max-width:860px){.lab{grid-template-columns:1fr}}
+.figure{border:1px solid var(--rule);background:var(--figure);border-radius:4px;padding:.55rem .55rem .35rem}
+canvas{display:block;width:100%;height:300px}
+@media (max-width:600px){canvas{height:250px}}
+.subgrid{display:grid;grid-template-columns:200px minmax(0,1fr);gap:1rem;align-items:stretch}
+@media (max-width:600px){.subgrid{grid-template-columns:1fr}}
+.ladder{width:100%;height:auto;display:block}
+.ladder text{font-family:var(--font-ui);font-size:12px}
+.controls{display:flex;flex-direction:column;gap:1.15rem}
+.control label{display:flex;justify-content:space-between;gap:.75rem;align-items:baseline;font-size:.95rem}
+.control label.check{justify-content:flex-start;align-items:center}
+.lab > div{min-width:0}
+.control label output{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.control input[type=range]{width:100%;accent-color:var(--ink);margin:.4rem 0 0;display:block}
+.control .hint{font-size:.82rem;color:var(--graphite);margin:.3rem 0 0;line-height:1.4}
+.check{display:flex;gap:.55rem;align-items:center;font-size:.95rem;cursor:pointer}
+.check input{accent-color:var(--ink);width:1.05rem;height:1.05rem;margin:0}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1.1rem 1.5rem;margin:1.5rem 0 0;padding:0}
+.readout div{margin:0}
+.readout dt{font-size:.85rem;color:var(--graphite);line-height:1.35}
+.readout dd{margin:.1rem 0 0;font-size:1.55rem;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.2}
+.meaning{margin:1.4rem 0 0;max-width:70ch;font-size:1.04rem}
+.formula{margin:1rem 0 0;color:var(--graphite);font-size:.95rem;max-width:70ch;line-height:1.55}
+.actions{display:flex;flex-wrap:wrap;gap:.6rem 1rem;align-items:center;margin:1rem 0 0}
+button.act{appearance:none;font:inherit;font-size:.9rem;font-weight:500;padding:.45rem .9rem;border:1.5px solid var(--ink);border-radius:4px;background:transparent;color:var(--ink);cursor:pointer}
+button.act:hover{background:var(--ink);color:var(--paper)}
+.bid{color:var(--bid)}
+.ask{color:var(--ask)}
+footer{margin-top:3.75rem;padding-top:1.25rem;border-top:1px solid var(--rule);color:var(--graphite);font-size:.9rem;max-width:72ch;line-height:1.55}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Microstructure lab</h1>
+  <p>Four small models from chapter 2 of Cartea, Jaimungal and Penalva, with every parameter on a slider. Each tab is one model: drag, and the figure, the numbers and the sentence underneath update together.</p>
+</header>
+
+<div class="tabs" role="tablist" aria-label="Models">
+  <button role="tab" id="tab-gm" aria-selected="true" aria-controls="panel-gm">Inventory risk</button>
+  <button role="tab" id="tab-kyle" aria-selected="false" aria-controls="panel-kyle" tabindex="-1">Price impact</button>
+  <button role="tab" id="tab-glo" aria-selected="false" aria-controls="panel-glo" tabindex="-1">Adverse selection</button>
+  <button role="tab" id="tab-ho" aria-selected="false" aria-controls="panel-ho" tabindex="-1">Posting depth</button>
+</div>
+
+<!-- ============ Grossman-Miller ============ -->
+<section class="panel" id="panel-gm" role="tabpanel" aria-labelledby="tab-gm">
+  <h2>Grossman and Miller: the price of immediacy</h2>
+  <p class="story">A seller needs to unload <span id="gm-i-inline">100</span> shares today. The natural buyer only arrives tomorrow. Someone risk-averse has to hold the shares overnight through a random shock, and nobody does that for free. Fair value is 100.</p>
+  <div class="lab">
+    <div>
+      <div class="figure"><canvas id="gm-chart" aria-label="Price concession per share against the number of market makers"></canvas></div>
+      <dl class="readout">
+        <div><dt>Trade price S₁</dt><dd id="gm-s1"></dd></div>
+        <div><dt>Concession below fair value</dt><dd id="gm-disc" class="ask"></dd></div>
+        <div><dt>Each risk-bearer holds</dt><dd id="gm-hold"></dd></div>
+        <div><dt>Seller executes now</dt><dd id="gm-sold"></dd></div>
+        <div><dt>Price impact λ per share</dt><dd id="gm-lambda"></dd></div>
+        <div><dt>Seller's total cost of immediacy</dt><dd id="gm-cost"></dd></div>
+      </dl>
+      <p class="meaning" id="gm-text"></p>
+      <p class="formula">S₁ = μ - γσ²·i/(n+1) - 2η·n/(n+1). The concession is γσ² times the inventory each of the n+1 risk-bearers ends up holding: the marginal risk cost of the last share. Price impact λ = -γσ²/n.</p>
+    </div>
+    <div class="controls">
+      <div class="control"><label for="gm-n">Market makers competing, n <output id="gm-n-val"></output></label><input type="range" id="gm-n" min="1" max="30" step="1" value="5"></div>
+      <div class="control"><label for="gm-i">Order size, i (shares) <output id="gm-i-val"></output></label><input type="range" id="gm-i" min="10" max="500" step="10" value="100"></div>
+      <div class="control"><label for="gm-sigma">Overnight volatility, σ <output id="gm-sigma-val"></output></label><input type="range" id="gm-sigma" min="0.5" max="5" step="0.1" value="2"><p class="hint">Standard deviation of tomorrow's news shock, in price units.</p></div>
+      <div class="control"><label for="gm-gamma">Risk aversion, γ <output id="gm-gamma-val"></output></label><input type="range" id="gm-gamma" min="0.001" max="0.1" step="0.001" value="0.02"><p class="hint">Everyone's utility penalty per unit of variance.</p></div>
+      <div class="control"><label for="gm-eta">Exchange fee per share, η <output id="gm-eta-val"></output></label><input type="range" id="gm-eta" min="0" max="0.5" step="0.01" value="0"><p class="hint">Paid by whoever trades. Market makers pay it twice: buying today and selling tomorrow.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Kyle ============ -->
+<section class="panel" id="panel-kyle" role="tabpanel" aria-labelledby="tab-kyle" hidden>
+  <h2>Kyle: trading an edge when your own order moves the price</h2>
+  <p class="story">One insider knows the true value. Noise traders send random orders. The market makers see only the total flow and set the price to their best estimate of value given that flow. The insider knows they will, and sizes his order accordingly. Prior fair value is 100.</p>
+  <div class="lab">
+    <div>
+      <div class="figure"><canvas id="k-chart" aria-label="Price as a function of net order flow, with simulated auctions"></canvas></div>
+      <dl class="readout">
+        <div><dt>Kyle's λ: price move per share of flow</dt><dd id="k-lambda"></dd></div>
+        <div><dt>Insider's β: shares per unit of edge</dt><dd id="k-beta"></dd></div>
+        <div><dt>Insider's order x*</dt><dd id="k-x"></dd></div>
+        <div><dt>Expected price after trading</dt><dd id="k-es"></dd></div>
+        <div><dt>Insider's expected profit</dt><dd id="k-profit"></dd></div>
+        <div><dt>100 shares of buying move the price by</dt><dd id="k-impact100"></dd></div>
+      </dl>
+      <div class="actions">
+        <button class="act" id="k-run1">Run 1 auction</button>
+        <button class="act" id="k-run100">Run 100 auctions</button>
+        <button class="act" id="k-reset">Clear</button>
+      </div>
+      <p class="meaning" id="k-sim"></p>
+      <p class="meaning" id="k-text"></p>
+      <p class="formula">Insider: x* = (v - μ)/(2λ). Market makers: S = μ + λ(x + u), with λ = Cov(v, flow)/Var(flow). Solving both together gives λ = σ/(2σᵤ) and β = σᵤ/σ. The expected price ends halfway between the prior μ and the truth v.</p>
+    </div>
+    <div class="controls">
+      <div class="control"><label for="k-sigma">Uncertainty about value, σ <output id="k-sigma-val"></output></label><input type="range" id="k-sigma" min="1" max="20" step="0.5" value="5"><p class="hint">Standard deviation of the true value around the prior of 100.</p></div>
+      <div class="control"><label for="k-sigu">Noise trading, σᵤ <output id="k-sigu-val"></output></label><input type="range" id="k-sigu" min="5" max="200" step="5" value="50"><p class="hint">Standard deviation of the noise traders' net order, in shares. More noise gives the insider more cover.</p></div>
+      <div class="control"><label for="k-v">True value the insider sees, v <output id="k-v-val"></output></label><input type="range" id="k-v" min="80" max="120" step="0.5" value="108"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Glosten-Milgrom ============ -->
+<section class="panel" id="panel-glo" role="tabpanel" aria-labelledby="tab-glo" hidden>
+  <h2>Glosten and Milgrom: the spread as insurance against informed traders</h2>
+  <p class="story">Every order might come from someone who already knows the answer. The market maker cannot tell who, so she prices each quote at the value she expects given that someone just chose to trade against it. Competition leaves her zero profit; the spread is what covering that risk costs.</p>
+  <div class="lab">
+    <div>
+      <div class="subgrid">
+        <div class="figure"><svg id="g-ladder" class="ladder" viewBox="0 0 220 300" role="img" aria-label="Price ladder showing low value, bid, fair value, ask and high value"></svg></div>
+        <div class="figure"><canvas id="g-chart" aria-label="Quoted spread against the share of informed traders"></canvas></div>
+      </div>
+      <dl class="readout">
+        <div><dt>Fair value μ</dt><dd id="g-mu"></dd></div>
+        <div><dt>A buy order is informed with probability</dt><dd id="g-pinfb"></dd></div>
+        <div><dt>Ask</dt><dd id="g-ask" class="ask"></dd></div>
+        <div><dt>Bid</dt><dd id="g-bid" class="bid"></dd></div>
+        <div><dt>Quoted spread</dt><dd id="g-spread"></dd></div>
+        <div><dt>Spread as a share of the value gap</dt><dd id="g-spreadpct"></dd></div>
+      </dl>
+      <p class="meaning" id="g-text"></p>
+      <p class="formula">Ask half-spread Δₐ = P(informed | buy) × (high value - μ), where P(informed | buy) = αp / (αp + (1-α)/2). The bid half-spread mirrors it with 1-p and μ - low value. Equivalently: ask = E[value | a buy just arrived], bid = E[value | a sell just arrived].</p>
+
+      <h3>Watch the book learn, trade by trade</h3>
+      <p class="story">Nature picks the true value and hides it. Each period one trader arrives, informed with probability α. After every order the market maker updates her belief with Bayes' rule and re-quotes. Each execution price is her posterior expectation, so the trade prices form a martingale and the quotes converge on the truth.</p>
+      <div class="figure"><canvas id="g-dyn" aria-label="Bid, ask and belief-implied fair value over a sequence of trades"></canvas></div>
+      <div class="actions">
+        <button class="act" id="g-new">New market</button>
+        <button class="act" id="g-step">Next trade</button>
+        <button class="act" id="g-run">Run 25 trades</button>
+        <label class="check"><input type="checkbox" id="g-reveal"> Reveal the true value</label>
+      </div>
+      <p class="meaning" id="g-dyntext"></p>
+    </div>
+    <div class="controls">
+      <div class="control"><label for="g-alpha">Share of traders who are informed, α <output id="g-alpha-val"></output></label><input type="range" id="g-alpha" min="0" max="1" step="0.01" value="0.2"><p class="hint">The prevalence of toxic flow.</p></div>
+      <div class="control"><label for="g-p">Prior chance the value is high, p <output id="g-p-val"></output></label><input type="range" id="g-p" min="0.05" max="0.95" step="0.01" value="0.5"></div>
+      <div class="control"><label for="g-range">Value gap: low to high <output id="g-range-val"></output></label><input type="range" id="g-range" min="2" max="40" step="1" value="20"><p class="hint">Centred on 100. The size of what an informed trader knows.</p></div>
+      <div class="control"><label class="check" for="g-urgency"><input type="checkbox" id="g-urgency"> Liquidity traders can walk away</label><p class="hint">Each uninformed trader trades only if the half-spread is below their urgency, drawn uniformly between 0 and the ceiling below.</p></div>
+      <div class="control" id="g-cmax-wrap" hidden><label for="g-cmax">Urgency ceiling <output id="g-cmax-val"></output></label><input type="range" id="g-cmax" min="1" max="30" step="0.5" value="10"><p class="hint">Drag it down and watch the spread feed on itself until the market collapses.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Ho-Stoll ============ -->
+<section class="panel" id="panel-ho" role="tabpanel" aria-labelledby="tab-ho" hidden>
+  <h2>Ho and Stoll: how far from the mid to rest a quote</h2>
+  <p class="story">A risk-neutral market maker posts a sell order δ ticks above the mid. Post tight and you fill often for a sliver. Post deep and you earn a fat margin on fills that rarely come. Incoming market orders walk into the book a random distance with an exponential tail.</p>
+  <div class="lab">
+    <div>
+      <div class="figure"><canvas id="h-chart" aria-label="Expected profit per arriving market order against posting depth"></canvas></div>
+      <dl class="readout">
+        <div><dt>Optimal depth δ* = 1/κ</dt><dd id="h-dstar"></dd></div>
+        <div><dt>Fill probability at δ*</dt><dd id="h-fillstar"></dd></div>
+        <div><dt>Expected profit per arrival at δ*</dt><dd id="h-pistar"></dd></div>
+        <div><dt>Your depth δ</dt><dd id="h-d"></dd></div>
+        <div><dt>Fill probability at your δ</dt><dd id="h-fill"></dd></div>
+        <div><dt>Expected profit per arrival at your δ</dt><dd id="h-pi"></dd></div>
+      </dl>
+      <p class="meaning" id="h-text"></p>
+      <p class="formula">Expected profit = p⁺ · e^(-κδ) · δ. Setting the derivative to zero gives δ* = 1/κ, which is also the mean distance an aggressive order walks into the book. At the optimum the fill probability is always 1/e ≈ 36.8%, whatever κ is.</p>
+    </div>
+    <div class="controls">
+      <div class="control"><label for="h-kappa">Book decay, κ <output id="h-kappa-val"></output></label><input type="range" id="h-kappa" min="0.1" max="3" step="0.05" value="0.5"><p class="hint">The chance an order walks at least δ ticks deep is e^(-κδ). Large κ: orders rarely walk far, so quote tight.</p></div>
+      <div class="control"><label for="h-p">Chance a market order arrives, p⁺ <output id="h-p-val"></output></label><input type="range" id="h-p" min="0.05" max="1" step="0.05" value="0.6"><p class="hint">Scales the profit; it does not change where to post.</p></div>
+      <div class="control"><label for="h-delta">Your posting depth, δ (ticks) <output id="h-delta-val"></output></label><input type="range" id="h-delta" min="0.1" max="10" step="0.1" value="1"></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Models as presented in chapter 2 of Álvaro Cartea, Sebastian Jaimungal and José Penalva, <em>Algorithmic and High-Frequency Trading</em> (Cambridge University Press, 2015): Grossman and Miller (1988), Kyle (1985), Glosten and Milgrom (1985), Ho and Stoll (1981). These are the static, one-period versions of each model, and all values are illustrative.
+</footer>
+
+</div>
+
+<script>
+(function(){
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = (x, d = 2) => { if (!isFinite(x)) return 'n/a'; return Math.abs(x) >= 10000 ? Math.round(x).toLocaleString('en-GB') : x.toFixed(d); };
+const pct = (x, d = 1) => isFinite(x) ? (100 * x).toFixed(d) + '%' : 'n/a';
+const askT = t => `<span class="ask">${t}</span>`;
+const bidT = t => `<span class="bid">${t}</span>`;
+function randn(){ let u = 0, v = 0; while (u === 0) u = Math.random(); while (v === 0) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const cssCache = {};
+const css = n => { if (!cssCache[n]) cssCache[n] = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; };
+let col = null;
+function colors(){ if (!col) col = { ink: css('--ink'), graphite: css('--graphite'), rule: css('--rule'), bid: css('--bid'), ask: css('--ask'), figure: css('--figure') }; return col; }
+
+/* ---------- tiny chart library ---------- */
+function niceStep(raw){ const p = Math.pow(10, Math.floor(Math.log10(raw))); const r = raw / p; const m = r < 1.5 ? 1 : r < 3.5 ? 2 : r < 7.5 ? 5 : 10; return m * p; }
+function ticks(min, max, n){ if (!(max > min)) return Object.assign([min], { step: 1 }); const step = niceStep((max - min) / n); const out = []; let v = Math.ceil(min / step - 1e-9) * step; while (v <= max + 1e-9 && out.length < 60){ out.push(Math.abs(v) < 1e-12 ? 0 : v); v += step; } out.step = step; return out; }
+function tickLabel(v, arr){ const step = arr.step || 1; const d = Math.max(0, -Math.floor(Math.log10(step))); return v.toFixed(d); }
+
+class Chart {
+  constructor(canvas){ this.c = canvas; this.ctx = canvas.getContext('2d'); }
+  size(){ const dpr = window.devicePixelRatio || 1; const w = this.c.clientWidth || 640; const h = this.c.clientHeight || 300; const W = Math.round(w * dpr), H = Math.round(h * dpr); if (this.c.width !== W || this.c.height !== H){ this.c.width = W; this.c.height = H; } this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return { w, h }; }
+  draw(spec){
+    const { w, h } = this.size(); const ctx = this.ctx; const k = colors();
+    ctx.clearRect(0, 0, w, h);
+    const m = { l: 54, r: 16, t: spec.ylabel ? 28 : 14, b: 40 };
+    const pw = w - m.l - m.r, ph = h - m.t - m.b;
+    if (pw <= 10 || ph <= 10) return;
+    const xr = (spec.xmax - spec.xmin) || 1, yr = (spec.ymax - spec.ymin) || 1;
+    const X = x => m.l + (x - spec.xmin) / xr * pw, Y = y => m.t + ph - (y - spec.ymin) / yr * ph;
+    const font = '12px ' + css('--font-ui');
+    ctx.font = font; ctx.lineWidth = 1;
+    const xt = ticks(spec.xmin, spec.xmax, w < 480 ? 4 : 7), yt = ticks(spec.ymin, spec.ymax, 5);
+    ctx.strokeStyle = k.rule; ctx.fillStyle = k.graphite;
+    yt.forEach(v => { ctx.beginPath(); ctx.moveTo(m.l, Y(v)); ctx.lineTo(w - m.r, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(tickLabel(v, yt), m.l - 8, Y(v)); });
+    xt.forEach(v => { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(tickLabel(v, xt), X(v), m.t + ph + 7); });
+    ctx.strokeStyle = k.graphite; ctx.beginPath(); ctx.moveTo(m.l, m.t); ctx.lineTo(m.l, m.t + ph); ctx.lineTo(w - m.r, m.t + ph); ctx.stroke();
+    if (spec.xlabel){ ctx.fillStyle = k.graphite; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(spec.xlabel, w - m.r, h - 3); }
+    if (spec.ylabel){ ctx.fillStyle = k.graphite; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(spec.ylabel, m.l, m.t - 8); }
+    ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+    (spec.hlines || []).forEach(l => { ctx.setLineDash(l.dash || []); ctx.strokeStyle = l.color; ctx.lineWidth = 1.25; ctx.beginPath(); ctx.moveTo(m.l, Y(l.y)); ctx.lineTo(w - m.r, Y(l.y)); ctx.stroke(); ctx.setLineDash([]); if (l.label){ ctx.fillStyle = l.color; ctx.textAlign = l.align === 'right' ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(l.label, l.align === 'right' ? w - m.r - 6 : m.l + 6, Y(l.y) - 3); } });
+    (spec.vlines || []).forEach(l => { ctx.setLineDash(l.dash || []); ctx.strokeStyle = l.color; ctx.lineWidth = 1.25; ctx.beginPath(); ctx.moveTo(X(l.x), m.t); ctx.lineTo(X(l.x), m.t + ph); ctx.stroke(); ctx.setLineDash([]); if (l.label){ ctx.fillStyle = l.color; ctx.textAlign = X(l.x) > m.l + pw * 0.6 ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(l.label, X(l.x) + (X(l.x) > m.l + pw * 0.6 ? -5 : 5), m.t + ph - 5); } });
+    (spec.series || []).forEach(s => {
+      if (s.type === 'points'){ ctx.fillStyle = s.color; for (let i = 0; i < s.x.length; i++){ ctx.beginPath(); ctx.arc(X(s.x[i]), Y(s.y[i]), s.r || 3, 0, Math.PI * 2); ctx.fill(); } }
+      else { ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.setLineDash(s.dash || []); ctx.beginPath(); let started = false; for (let i = 0; i < s.x.length; i++){ const yv = s.y[i]; if (!isFinite(yv)){ started = false; continue; } if (!started){ ctx.moveTo(X(s.x[i]), Y(yv)); started = true; } else ctx.lineTo(X(s.x[i]), Y(yv)); } ctx.stroke(); ctx.setLineDash([]); }
+    });
+    ctx.restore();
+    (spec.markers || []).forEach(mk => { ctx.fillStyle = mk.color; ctx.beginPath(); ctx.arc(X(mk.x), Y(mk.y), 5.5, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = k.figure; ctx.stroke(); if (mk.label){ ctx.fillStyle = mk.color; ctx.font = '600 12px ' + css('--font-ui'); ctx.textAlign = mk.align === 'right' ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(mk.label, X(mk.x) + (mk.align === 'right' ? -9 : 9), Y(mk.y) - 6); ctx.font = font; } });
+    if (spec.legend){ let y = m.t + 12; const x0 = w - m.r - 10; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; spec.legend.forEach(it => { ctx.fillStyle = k.ink; ctx.fillText(it.label, x0 - 24, y); ctx.strokeStyle = it.color; ctx.lineWidth = 2; ctx.setLineDash(it.dash || []); ctx.beginPath(); ctx.moveTo(x0 - 18, y); ctx.lineTo(x0, y); ctx.stroke(); ctx.setLineDash([]); y += 17; }); }
+  }
+}
+
+/* ---------- Grossman-Miller: book 2.1.1, 2.1.2, 2.1.3 (pp. 21-28) ----------
+   Demand rule for any risk-averse agent (mean minus half gamma times variance):
+       q* = (E[S_next] - S_now) / (gamma sigma^2)
+   Market clearing at t = 1, n market makers plus the seller LT1 who holds i shares:
+       (n + 1) q* = i   =>   S1 = mu - gamma sigma^2 i / (n + 1)                        [p. 24]
+   Per-share exchange fee eta (2.1.2): the MM pays 2 eta on the round trip and passes it on:
+       S1 = mu - gamma sigma^2 i / (n + 1) - 2 eta n / (n + 1)                          [p. 26]
+   Price impact form (2.1.3): S1 = mu + lambda q, lambda = -gamma sigma^2 / n, q = n i/(n+1)  [p. 27]
+   gmCalc() is the whole model. gmRender() plots concession against n: competition kills the discount. */
+const gm = { chart: new Chart($('#gm-chart')) };
+const gmRead = () => ({ mu: 100, n: +$('#gm-n').value, i: +$('#gm-i').value, sigma: +$('#gm-sigma').value, gamma: +$('#gm-gamma').value, eta: +$('#gm-eta').value });
+function gmCalc(p, n = p.n){ const risk = p.gamma * p.sigma * p.sigma * p.i / (n + 1); const fee = 2 * p.eta * n / (n + 1); return { risk, fee, total: risk + fee, S1: p.mu - risk - fee, hold: p.i / (n + 1), sold: n * p.i / (n + 1), lambda: -p.gamma * p.sigma * p.sigma / n }; }
+function gmRender(){
+  const p = gmRead(), r = gmCalc(p), k = colors();
+  $('#gm-n-val').textContent = p.n; $('#gm-i-val').textContent = p.i; $('#gm-sigma-val').textContent = p.sigma.toFixed(1); $('#gm-gamma-val').textContent = p.gamma.toFixed(3); $('#gm-eta-val').textContent = p.eta.toFixed(2);
+  $('#gm-i-inline').textContent = p.i;
+  $('#gm-s1').textContent = fmt(r.S1); $('#gm-disc').textContent = fmt(r.total); $('#gm-hold').textContent = fmt(r.hold, 1); $('#gm-sold').textContent = fmt(r.sold, 1); $('#gm-lambda').textContent = fmt(r.lambda, 4); $('#gm-cost').textContent = fmt(r.total * r.sold);
+  let t = `The seller and ${p.n} market maker${p.n > 1 ? 's' : ''} split the overnight risk ${p.n + 1} ways, so each ends up holding ${fmt(r.hold, 1)} shares. Nobody carries that for free: the price is marked down by γσ² × ${fmt(r.hold, 1)} = ${askT(fmt(r.risk))} per share`;
+  t += p.eta > 0 ? `, plus ${fmt(r.fee)} of the market makers' round-trip fees passed through in the price.` : '.';
+  t += ` The seller executes ${fmt(r.sold, 1)} shares now at ${fmt(r.S1)}, keeps ${fmt(r.hold, 1)} for tomorrow, and pays ${fmt(r.total * r.sold)} in total for immediacy.`;
+  if (r.S1 <= 0) t += ' The concession now exceeds the price itself: the normal-shock assumption has been pushed past where it makes sense.';
+  $('#gm-text').innerHTML = t;
+  const xs = [], ys = []; for (let n = 1; n <= 30; n++){ xs.push(n); ys.push(gmCalc(p, n).total); }
+  const ymax = Math.max(...ys) * 1.15 || 1;
+  gm.chart.draw({ xmin: 1, xmax: 30, ymin: 0, ymax, xlabel: 'number of market makers, n', ylabel: 'price concession per share', series: [{ x: xs, y: ys, color: k.ask }], markers: [{ x: p.n, y: r.total, color: k.ink, label: `n = ${p.n}: ${fmt(r.total)}`, align: p.n > 20 ? 'right' : 'left' }] });
+}
+
+/* ---------- Kyle: book 2.2 (pp. 30-33) ----------
+   Insider, given a linear price rule S = mu + lambda (x + u):
+       max_x E[x (v - S)] = x (v - mu) - lambda x^2   =>   x* = (v - mu) / (2 lambda) = beta (v - mu)
+   Market makers, zero expected profit, so S = E[v | x + u]; for jointly normal variables
+       lambda = Cov(v, x+u) / Var(x+u) = beta sigma^2 / (beta^2 sigma^2 + sigma_u^2)
+   Both hold at once only if
+       lambda = sigma / (2 sigma_u),   beta = sigma_u / sigma
+   (the line printed as lambda = 2 sigma_u / sigma on p. 33 is inverted: more noise must lower lambda).
+   Consequences coded in kCalc(): E[S | v] = mu + (v - mu)/2 and insider expected profit sigma sigma_u / 2.
+   kSample() draws u ~ N(0, sigma_u^2) and prices y = x* + u exactly as the market makers would. */
+const ky = { chart: new Chart($('#k-chart')), samples: [] };
+const kRead = () => ({ mu: 100, sigma: +$('#k-sigma').value, sigu: +$('#k-sigu').value, v: +$('#k-v').value });
+function kCalc(p){ const lambda = p.sigma / (2 * p.sigu), beta = p.sigu / p.sigma; return { lambda, beta, x: beta * (p.v - p.mu), ES: p.mu + 0.5 * (p.v - p.mu), profit: p.sigma * p.sigu / 2 }; }
+function kSample(n){ const p = kRead(), r = kCalc(p); for (let j = 0; j < n; j++){ const u = p.sigu * randn(); const y = r.x + u; const S = p.mu + r.lambda * y; ky.samples.push({ y, S, prof: r.x * (p.v - S) }); } kRender(); }
+function kRender(){
+  const p = kRead(), r = kCalc(p), k = colors();
+  $('#k-sigma-val').textContent = p.sigma.toFixed(1); $('#k-sigu-val').textContent = p.sigu; $('#k-v-val').textContent = p.v.toFixed(1);
+  $('#k-lambda').textContent = fmt(r.lambda, 4); $('#k-beta').textContent = fmt(r.beta, 2); $('#k-x').textContent = r.x === 0 ? 'none' : (r.x > 0 ? 'buy ' : 'sell ') + fmt(Math.abs(r.x), 1); $('#k-es').textContent = fmt(r.ES); $('#k-profit').textContent = fmt(r.profit); $('#k-impact100').textContent = fmt(100 * r.lambda);
+  const edge = p.v - p.mu;
+  let t;
+  if (edge === 0) t = `The insider sees no edge against the prior of 100, so he sits out. The market makers still read every unit of flow with gain λ = ${fmt(r.lambda, 4)}, because they cannot tell that today's flow is pure noise.`;
+  else t = `The insider sees an edge of ${fmt(edge)} against the prior of 100. Trading it all at once would move the price against him, so he sends ${fmt(Math.abs(r.x), 1)} shares: half of what he would trade if the price stayed put. The market makers read the flow with gain λ = ${fmt(r.lambda, 4)} and, on average, move the price to ${fmt(r.ES)}, halfway to the truth. His expected profit of ${fmt(r.profit)} is exactly what the noise traders expect to lose.`;
+  $('#k-text').innerHTML = t;
+  const n = ky.samples.length;
+  if (n === 0){ $('#k-sim').textContent = 'Run an auction: a noise order u is drawn, the total flow x + u is priced by the market makers, and a dot lands on the impact line.'; }
+  else { const avgS = ky.samples.reduce((a, s) => a + s.S, 0) / n, avgP = ky.samples.reduce((a, s) => a + s.prof, 0) / n; const last = ky.samples[n - 1]; $('#k-sim').innerHTML = `Last auction: net flow ${fmt(last.y, 1)} shares, price ${fmt(last.S)}, insider made ${fmt(last.prof)}. Across ${n} auction${n > 1 ? 's' : ''}: average price ${fmt(avgS)} (theory ${fmt(r.ES)}), average insider profit ${fmt(avgP)} (theory ${fmt(r.profit)}).`; }
+  const xr = Math.max(3 * p.sigu, Math.abs(r.x) + 3 * p.sigu); const xmin = -xr, xmax = xr;
+  const line = { x: [xmin, xmax], y: [p.mu + r.lambda * xmin, p.mu + r.lambda * xmax], color: k.ink, width: 2 };
+  const ys = [line.y[0], line.y[1], p.v, p.mu]; let ymin = Math.min(...ys), ymax = Math.max(...ys); const pad = (ymax - ymin) * 0.12 || 1; ymin -= pad; ymax += pad;
+  const hl = [{ y: p.mu, color: k.graphite, dash: [4, 4], label: 'prior μ = 100', align: 'right' }];
+  if (edge !== 0){ hl.push({ y: p.v, color: k.ink, dash: [2, 3], label: `true value v = ${fmt(p.v, 1)}`, align: 'right' }); hl.push({ y: r.ES, color: k.bid, dash: [6, 3], label: `expected price ${fmt(r.ES)}`, align: 'right' }); }
+  ky.chart.draw({ xmin, xmax, ymin, ymax, xlabel: 'net order flow x + u (shares, buying positive)', ylabel: 'price set by the market makers', series: [line, { type: 'points', x: ky.samples.map(s => s.y), y: ky.samples.map(s => s.S), color: k.ask, r: 3 }], hlines: hl, vlines: [{ x: r.x, color: k.graphite, dash: [3, 3], label: `insider's order x* = ${fmt(r.x, 1)}` }] });
+}
+
+/* ---------- Glosten-Milgrom: book 2.3, 2.3.1, 2.3.2 (pp. 34-37) ----------
+   Zero expected profit on the ask when a buy order arrives:
+       [(1 - alpha)/2] Delta_a + alpha p [Delta_a - (V_H - mu)] = 0
+       =>  Delta_a = alpha p / (alpha p + (1 - alpha)/2) * (V_H - mu) = P(informed | buy) * (V_H - mu)   [p. 35]
+   Bid side: the same with (1 - p) and (mu - V_L). Equivalently ask = E[v | buy], bid = E[v | sell].
+   solveHalf() computes one side. With price-sensitive liquidity traders (2.3.2) the uninformed mass shrinks to
+   (1 - alpha)(1 - F(Delta))/2 with F uniform on [0, cmax]; the equation becomes implicit and is solved by
+   fixed-point iteration from Delta = 0, which is monotone and converges to the smallest root. If the uninformed
+   mass reaches zero the only solution left is Delta = V_H - mu: market collapse (p. 37).
+   Dynamics (2.3.1): gStep() applies Bayes' rule after each order, p_t = P(V_H | history), mu_t = E[v | history],
+   and re-quotes with the same formulas, so every execution price equals the posterior mean (a martingale). */
+const gl = { chart: new Chart($('#g-chart')), dyn: new Chart($('#g-dyn')), mkt: null };
+const gRead = () => { const range = +$('#g-range').value; return { alpha: +$('#g-alpha').value, p: +$('#g-p').value, VH: 100 + range / 2, VL: 100 - range / 2, urgency: $('#g-urgency').checked, cmax: +$('#g-cmax').value }; };
+function solveHalf(alpha, pSide, magnitude, cmax, urgency){
+  if (alpha <= 0) return { delta: 0, pInf: 0, frac: 1 };
+  let d = 0;
+  for (let it = 0; it < 500; it++){
+    const frac = urgency ? 1 - Math.min(d / cmax, 1) : 1;
+    const wInf = alpha * pSide, wUn = (1 - alpha) * frac / 2;
+    const pInf = (wInf + wUn) > 0 ? wInf / (wInf + wUn) : 1;
+    const dn = pInf * magnitude;
+    if (Math.abs(dn - d) < 1e-10){ d = dn; break; }
+    d = dn;
+  }
+  const frac = urgency ? 1 - Math.min(d / cmax, 1) : 1;
+  const wInf = alpha * pSide, wUn = (1 - alpha) * frac / 2;
+  const pInf = (wInf + wUn) > 0 ? wInf / (wInf + wUn) : 1;
+  return { delta: d, pInf, frac };
+}
+function gQuotes(par, belief){
+  const mu = belief * par.VH + (1 - belief) * par.VL;
+  const a = solveHalf(par.alpha, belief, par.VH - mu, par.cmax, par.urgency);
+  const b = solveHalf(par.alpha, 1 - belief, mu - par.VL, par.cmax, par.urgency);
+  const collapseA = par.urgency && par.alpha > 0 && a.frac <= 1e-9, collapseB = par.urgency && par.alpha > 0 && b.frac <= 1e-9;
+  return { mu, da: a.delta, db: b.delta, pInfBuy: a.pInf, pInfSell: b.pInf, fracBuy: a.frac, fracSell: b.frac, collapseA, collapseB, collapse: collapseA || collapseB, ask: mu + a.delta, bid: mu - b.delta, spread: a.delta + b.delta };
+}
+function drawLadder(par, q){
+  const k = colors(); const svg = $('#g-ladder'); const H = 300; const span = par.VH - par.VL; const lo = par.VL - span * 0.1, hi = par.VH + span * 0.1;
+  const Y = v => 18 + (hi - v) / (hi - lo) * (H - 36);
+  const items = [
+    { v: par.VH, label: `high value ${fmt(par.VH, 0)}`, color: k.ink, w: 1.5 },
+    { v: q.ask, label: `ask ${fmt(q.ask)}`, color: k.ask, w: 3 },
+    { v: q.mu, label: `fair value ${fmt(q.mu)}`, color: k.graphite, w: 1.5, dash: true },
+    { v: q.bid, label: `bid ${fmt(q.bid)}`, color: k.bid, w: 3 },
+    { v: par.VL, label: `low value ${fmt(par.VL, 0)}`, color: k.ink, w: 1.5 }
+  ];
+  items.forEach(it => { it.y = Y(it.v); it.ly = it.y; });
+  const sorted = items.slice().sort((a, b) => a.y - b.y);
+  for (let i = 1; i < sorted.length; i++) if (sorted[i].ly - sorted[i - 1].ly < 15) sorted[i].ly = sorted[i - 1].ly + 15;
+  const over = sorted[sorted.length - 1].ly - (H - 8);
+  if (over > 0){ sorted.forEach(it => { it.ly -= over; }); for (let i = sorted.length - 2; i >= 0; i--) if (sorted[i + 1].ly - sorted[i].ly < 15) sorted[i].ly = sorted[i + 1].ly - 15; }
+  let s = `<line x1="52" y1="${Y(hi)}" x2="52" y2="${Y(lo)}" stroke="${k.graphite}" stroke-width="1"/>`;
+  s += `<rect x="34" y="${Y(q.ask)}" width="36" height="${Math.max(0, Y(q.bid) - Y(q.ask))}" fill="${k.ink}" opacity="0.07"/>`;
+  items.forEach(it => {
+    s += `<line x1="34" y1="${it.y}" x2="70" y2="${it.y}" stroke="${it.color}" stroke-width="${it.w}"${it.dash ? ' stroke-dasharray="4 3"' : ''}/>`;
+    if (Math.abs(it.ly - it.y) > 1) s += `<line x1="70" y1="${it.y}" x2="78" y2="${it.ly}" stroke="${it.color}" stroke-width="1"/>`;
+    s += `<text x="82" y="${it.ly}" fill="${it.color}" dominant-baseline="middle">${it.label}</text>`;
+  });
+  svg.innerHTML = s;
+}
+function gRender(){
+  const par = gRead(), q = gQuotes(par, par.p), k = colors();
+  $('#g-alpha-val').textContent = par.alpha.toFixed(2); $('#g-p-val').textContent = par.p.toFixed(2); $('#g-range-val').textContent = `${fmt(par.VL, 0)} to ${fmt(par.VH, 0)}`; $('#g-cmax-val').textContent = par.cmax.toFixed(1);
+  $('#g-cmax-wrap').hidden = !par.urgency;
+  $('#g-mu').textContent = fmt(q.mu); $('#g-pinfb').textContent = pct(q.pInfBuy); $('#g-ask').textContent = fmt(q.ask); $('#g-bid').textContent = fmt(q.bid); $('#g-spread').textContent = fmt(q.spread); $('#g-spreadpct').textContent = pct(q.spread / (par.VH - par.VL));
+  let t;
+  if (par.alpha === 0) t = 'With no informed traders, no order carries information. The market maker quotes fair value on both sides and the spread is zero.';
+  else {
+    t = `A buy order comes from an informed trader with probability ${pct(q.pInfBuy)}. When it does, the asset is really worth ${fmt(par.VH, 0)} and selling at fair value would lose ${fmt(par.VH - q.mu)}. Charging ${fmt(q.da)} above fair value on every buy covers that on average, so the ask is ${askT(fmt(q.ask))}. The same logic on sells gives a bid of ${bidT(fmt(q.bid))}. The spread of ${fmt(q.spread)} is ${pct(q.spread / (par.VH - par.VL))} of the whole gap between low and high value.`;
+    if (par.urgency && !q.collapse) t += ` Because only ${pct(q.fracBuy)} of would-be liquidity buyers accept a half-spread of ${fmt(q.da)}, the flow that reaches the market maker is more informed than the population is, and the spread widens to compensate.`;
+    if (q.collapse) t += ` ${q.collapseA && q.collapseB ? 'Both sides have' : q.collapseA ? 'The ask side has' : 'The bid side has'} collapsed: no liquidity trader will pay that spread, so the quote sits at the extreme value and nobody trades there.`;
+  }
+  $('#g-text').innerHTML = t;
+  drawLadder(par, q);
+  const xs = [], ys = []; for (let i = 0; i <= 100; i++){ const a = i / 100; xs.push(a); ys.push(gQuotes(Object.assign({}, par, { alpha: a }), par.p).spread); }
+  gl.chart.draw({ xmin: 0, xmax: 1, ymin: 0, ymax: (par.VH - par.VL) * 1.1, xlabel: 'share of informed traders, α', ylabel: 'quoted spread', series: [{ x: xs, y: ys, color: k.ink }], hlines: [{ y: par.VH - par.VL, color: k.graphite, dash: [4, 4], label: 'full value gap: nobody trades' }], markers: [{ x: par.alpha, y: q.spread, color: k.ask, label: `α = ${par.alpha.toFixed(2)}: spread ${fmt(q.spread)}`, align: par.alpha > 0.55 ? 'right' : 'left' }] });
+  gDynRender();
+}
+function gNewMarket(){ const par = gRead(); const v = Math.random() < par.p ? par.VH : par.VL; const q = gQuotes(par, par.p); gl.mkt = { v, belief: par.p, t: 0, hist: [{ t: 0, mu: q.mu, ask: q.ask, bid: q.bid }], trades: [], last: null }; gDynRender(); }
+function gStep(){
+  if (!gl.mkt) gNewMarket();
+  const par = gRead(), m = gl.mkt; const q = gQuotes(par, m.belief);
+  const informed = Math.random() < par.alpha;
+  let side;
+  if (informed){
+    side = m.v === par.VH ? 'buy' : 'sell';
+    if (side === 'buy' && q.ask >= par.VH - 1e-9) side = 'none';
+    if (side === 'sell' && q.bid <= par.VL + 1e-9) side = 'none';
+  } else {
+    side = Math.random() < 0.5 ? 'buy' : 'sell';
+    if (par.urgency){ const c = Math.random() * par.cmax; if (c < (side === 'buy' ? q.da : q.db)) side = 'none'; }
+  }
+  m.t += 1;
+  if (side === 'buy'){ const pH = par.alpha + (1 - par.alpha) * q.fracBuy / 2, pL = (1 - par.alpha) * q.fracBuy / 2; const den = m.belief * pH + (1 - m.belief) * pL; if (den > 0) m.belief = m.belief * pH / den; m.trades.push({ t: m.t, side, price: q.ask }); }
+  else if (side === 'sell'){ const pH = (1 - par.alpha) * q.fracSell / 2, pL = par.alpha + (1 - par.alpha) * q.fracSell / 2; const den = m.belief * pH + (1 - m.belief) * pL; if (den > 0) m.belief = m.belief * pH / den; m.trades.push({ t: m.t, side, price: q.bid }); }
+  const q2 = gQuotes(par, m.belief);
+  m.hist.push({ t: m.t, mu: q2.mu, ask: q2.ask, bid: q2.bid });
+  m.last = { side, price: side === 'buy' ? q.ask : side === 'sell' ? q.bid : null, informed };
+  gDynRender();
+}
+function gDynRender(){
+  const m = gl.mkt; if (!m) return;
+  const par = gRead(), k = colors();
+  const reveal = $('#g-reveal').checked;
+  const T = Math.max(10, m.hist.length - 1);
+  const xs = m.hist.map(h => h.t);
+  const span = par.VH - par.VL; const ymin = par.VL - span * 0.08, ymax = par.VH + span * 0.08;
+  const series = [
+    { x: xs, y: m.hist.map(h => h.ask), color: k.ask, width: 2 },
+    { x: xs, y: m.hist.map(h => h.bid), color: k.bid, width: 2 },
+    { x: xs, y: m.hist.map(h => h.mu), color: k.graphite, dash: [4, 4], width: 1.5 }
+  ];
+  const buys = m.trades.filter(tr => tr.side === 'buy'), sells = m.trades.filter(tr => tr.side === 'sell');
+  series.push({ type: 'points', x: buys.map(tr => tr.t), y: buys.map(tr => tr.price), color: k.ask, r: 3.5 });
+  series.push({ type: 'points', x: sells.map(tr => tr.t), y: sells.map(tr => tr.price), color: k.bid, r: 3.5 });
+  const hl = reveal ? [{ y: m.v, color: k.ink, dash: [2, 3], label: `true value ${fmt(m.v, 0)}`, align: 'right' }] : [];
+  gl.dyn.draw({ xmin: 0, xmax: T, ymin, ymax, xlabel: 'trade number', ylabel: 'quotes, with executions as dots', series, hlines: hl, legend: [{ label: 'ask', color: k.ask }, { label: 'bid', color: k.bid }, { label: 'belief-implied fair value', color: k.graphite, dash: [4, 4] }] });
+  const cur = m.hist[m.hist.length - 1];
+  let t;
+  if (m.t === 0) t = `Nature has picked the true value. The market maker starts from P(high) = ${par.p.toFixed(2)} and quotes ${bidT(fmt(cur.bid))} / ${askT(fmt(cur.ask))}. Press Next trade.`;
+  else {
+    const L = m.last;
+    const what = L.side === 'none' ? 'no trade, the arriving trader found the spread too wide or had nothing to gain' : L.side === 'buy' ? `a buy at the ask, ${fmt(L.price)}` : `a sell at the bid, ${fmt(L.price)}`;
+    t = `Trade ${m.t}: ${what}. The market maker now puts P(high) = ${m.belief.toFixed(3)} and quotes ${bidT(fmt(cur.bid))} / ${askT(fmt(cur.ask))}.`;
+    if (reveal) t += ` The true value is ${fmt(m.v, 0)}${L.side !== 'none' ? `, and that order came from ${L.informed ? 'an informed' : 'an uninformed'} trader` : ''}.`;
+  }
+  $('#g-dyntext').innerHTML = t;
+}
+
+/* ---------- Ho-Stoll, static version: book 2.1.4 (pp. 28-30) ----------
+   Expected profit per side: p+ e^(-kappa delta) delta                                   [eq. 2.3, p. 29]
+   d/d delta [delta e^(-kappa delta)] = e^(-kappa delta) (1 - kappa delta) = 0   =>   delta* = 1 / kappa
+   which is the mean of an Exponential(kappa) walk-depth distribution; fill probability at the optimum is e^-1. */
+const ho = { chart: new Chart($('#h-chart')) };
+function hRender(){
+  const kappa = +$('#h-kappa').value, pp = +$('#h-p').value, d = +$('#h-delta').value, k = colors();
+  $('#h-kappa-val').textContent = kappa.toFixed(2); $('#h-p-val').textContent = pp.toFixed(2); $('#h-delta-val').textContent = d.toFixed(1);
+  const dstar = 1 / kappa; const pi = x => pp * x * Math.exp(-kappa * x); const fill = x => Math.exp(-kappa * x);
+  $('#h-dstar').textContent = fmt(dstar) + ' ticks'; $('#h-fillstar').textContent = pct(Math.exp(-1)); $('#h-pistar').textContent = fmt(pi(dstar), 3); $('#h-d').textContent = d.toFixed(1) + ' ticks'; $('#h-fill').textContent = pct(fill(d)); $('#h-pi').textContent = fmt(pi(d), 3);
+  const gap = 1 - pi(d) / pi(dstar);
+  let t = `Incoming market orders walk into the book an average of 1/κ = ${fmt(dstar)} ticks, so that is where to rest the quote. `;
+  if (Math.abs(d - dstar) < 0.05) t += 'You are posting at the optimum.';
+  else if (d < dstar) t += `At ${d.toFixed(1)} ticks you fill ${pct(fill(d))} of the time but give away margin: expected profit per arrival is ${pct(gap)} below the optimum.`;
+  else t += `At ${d.toFixed(1)} ticks each fill earns more, but you fill only ${pct(fill(d))} of the time: expected profit per arrival is ${pct(gap)} below the optimum.`;
+  $('#h-text').textContent = t;
+  const xmax = Math.max(5 / kappa, d * 1.15, 1); const xs = [], ys = []; for (let i = 0; i <= 120; i++){ const x = xmax * i / 120; xs.push(x); ys.push(pi(x)); }
+  const ymax = pi(dstar) * 1.22;
+  ho.chart.draw({ xmin: 0, xmax, ymin: 0, ymax, xlabel: 'depth from mid, δ (ticks)', ylabel: 'expected profit per arriving market order', series: [{ x: xs, y: ys, color: k.ink }], markers: [{ x: dstar, y: pi(dstar), color: k.bid, label: `δ* = ${fmt(dstar)}`, align: d > dstar ? 'right' : 'left' }, { x: d, y: pi(d), color: k.ask, label: `your δ = ${d.toFixed(1)}`, align: d > dstar ? 'left' : 'right' }] });
+}
+
+/* ---------- tabs, wiring, init ---------- */
+const tabs = $$('.tabs [role="tab"]');
+function renderVisible(){ if (!$('#panel-gm').hidden) gmRender(); if (!$('#panel-kyle').hidden) kRender(); if (!$('#panel-glo').hidden) gRender(); if (!$('#panel-ho').hidden) hRender(); }
+function selectTab(id){ tabs.forEach(t => { const on = t.id === id; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; const panel = $('#' + t.getAttribute('aria-controls')); if (on) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', ''); }); renderVisible(); }
+tabs.forEach((t, i) => {
+  t.addEventListener('click', () => selectTab(t.id));
+  t.addEventListener('keydown', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft'){ e.preventDefault(); const j = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; tabs[j].focus(); selectTab(tabs[j].id); } });
+});
+['gm-n', 'gm-i', 'gm-sigma', 'gm-gamma', 'gm-eta'].forEach(id => $('#' + id).addEventListener('input', gmRender));
+['k-sigma', 'k-sigu', 'k-v'].forEach(id => $('#' + id).addEventListener('input', () => { ky.samples = []; kRender(); }));
+$('#k-run1').addEventListener('click', () => kSample(1));
+$('#k-run100').addEventListener('click', () => kSample(100));
+$('#k-reset').addEventListener('click', () => { ky.samples = []; kRender(); });
+['g-alpha', 'g-p', 'g-range', 'g-cmax'].forEach(id => $('#' + id).addEventListener('input', () => { gNewMarket(); gRender(); }));
+$('#g-urgency').addEventListener('change', () => { gNewMarket(); gRender(); });
+$('#g-new').addEventListener('click', gNewMarket);
+$('#g-step').addEventListener('click', gStep);
+$('#g-run').addEventListener('click', () => { for (let i = 0; i < 25; i++) gStep(); });
+$('#g-reveal').addEventListener('change', gDynRender);
+['h-kappa', 'h-p', 'h-delta'].forEach(id => $('#' + id).addEventListener('input', hRender));
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderVisible, 80); });
+gNewMarket();
+renderVisible();
+})();
+</script>
+</body>
+</html>
