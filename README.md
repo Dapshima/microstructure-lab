@@ -2,7 +2,7 @@
 
 Interactive versions of the four models in chapter 2 of Cartea, Jaimungal and Penalva, *Algorithmic and High-Frequency Trading* (Cambridge University Press, 2015): Grossman-Miller (inventory risk), Kyle (price impact), Glosten-Milgrom (adverse selection) and the static Ho-Stoll posting problem. Every parameter is on a slider; the figure, the key numbers and a plain-English sentence update together.
 
-Live version: `https://dapshima.github.io/microstructure-lab/` once Pages is enabled (steps below).
+Live version: `https://dapshima.github.io/microstructure-lab/`
 
 The whole thing is one file, `index.html`, with no build step and no dependencies. It runs entirely in the visitor's browser, so a hosted copy is exactly as interactive as a local one.
 
