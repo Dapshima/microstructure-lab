@@ -64,7 +64,7 @@ Open `index.html`. The `<style>` block is the design; the script block at the bo
 
 The derivations, step by step, with the code lines they correspond to, are in [`docs/theory-to-code.md`](docs/theory-to-code.md). A script for presenting the lab in a short video is in [`docs/teaching-script.md`](docs/teaching-script.md).
 
-## Publishing on GitHub Pages
+## Run your own copy
 
 1. Create a public repository named `microstructure-lab` and push this folder to it (`index.html`, `README.md`, `docs/`, `LICENSE`).
 2. In the repository, open Settings, then Pages. Under Build and deployment choose "Deploy from a branch", branch `main`, folder `/ (root)`. Save.
